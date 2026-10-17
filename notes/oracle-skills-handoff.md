@@ -20,15 +20,58 @@
 | Intro mirror (dev.to) | https://dev.to/oracledevs/ai-agents-know-sql-oracle-database-skills-teach-them-oracle-n5m |
 | OCI GenAI Agents Quick Start (researched, less relevant) | https://docs.oracle.com/en-us/iaas/Content/generative-ai/get-started-agents.htm |
 
-Note: `blogs.oracle.com` returned HTTP 403 to WebFetch/curl from the cloud container. Use web search or the GitHub repo instead.
+| **Article 2 full text (dev.to mirror, readable)** | https://dev.to/oracledevs/route-dont-flood-using-dbskillmd-to-steer-oracle-aware-assistants-4el0 |
+| Article 3: Controlled Oracle Actions with SQLcl MCP | https://dev.to/oracledevs/controlled-oracle-actions-with-sqlcl-mcp-120e |
+| Using Agent Skills to develop with Oracle AI Database | https://dev.to/oracledevs/using-agent-skills-to-develop-with-oracle-ai-database-3h6j |
+
+Note: `blogs.oracle.com` returns HTTP 403 to WebFetch/curl from the cloud container. The same articles (author: Mark Nelson) are on dev.to. To read one in full, use the API: `curl -s https://dev.to/api/articles/3677608 | jq -r .body_markdown` (Article 2 = id 3677608, Article 3 = id 3700591).
 
 ## What "Route, Don't Flood" means
 
 - Don't dump all Oracle docs into the model's context ("flood"). That leads to a mix of generic SQL habits and outdated Oracle advice.
 - Instead, **route**: `db/SKILL.md` is a front door with a routing table. The assistant reads it, picks the **one** file or folder relevant to the task, reads only that, then acts.
 - The routing prompt includes "Do not execute any actions", which keeps discovery separate from tool use. Actual execution comes in a later article about the SQLcl MCP server.
-- Paths by role: DBA → `performance/`, `security/`; app developer → `appdev/`, `frameworks/`; AI engineer → `agent/`, `features/` (Select AI), `vecdb/`.
-- RAG example route: Select AI profiles → Vector Search basics → `DBMS_VECTOR`.
+- The series follows an operating model of **route → act → trust**. Article 2 covers "route" only, with no execution.
+
+### Routes by persona (load one file, then decide)
+
+| Persona | Start in | Notes |
+|---------|----------|-------|
+| App developer | `db/frameworks/`, then `db/appdev/` | Spring, Django, SQLAlchemy: driver, dialect, type mapping, pooling |
+| AI engineer | `db/agent/` + `db/features/` | Schema discovery before DML, destructive-op guards, idempotency, Select AI / AI Profiles, Vector Search |
+| DBA | `db/performance/`, then `db/security/` | Read the *executed* plan: `DBMS_XPLAN.DISPLAY_CURSOR(NULL, NULL, 'ALLSTATS LAST')` |
+| Migration lead | `db/migrations/` + `db/devops/` | Assessment and translation, then delivery (EBR, online ops, testing) |
+
+### Routes by task (follow the order)
+
+- **RAG** (`db/features`): ai-profiles → vector-search → dbms-vector. Set governance first (`OBJECT_LIST`, `SHOW SQL`).
+- **Slow query** (`db/performance`): explain-plan → wait-events → optimizer-stats → awr-reports. AWR/ASH may need licensing.
+- **Agent-safe schema change** (`db/agent` + `db/migrations`): schema-discovery → destructive-op-guards → idempotency-patterns → schema-migrations
+- **MCP setup** (comes later, in "act"): sqlcl-basics → least-privilege skill in `db/security` → sqlcl-mcp-server
+
+### Progressive-discovery prompt (from the article)
+
+```text
+Open db/SKILL.md. I'm [persona or task].
+Which single skill file should I load next, and why?
+Summarize that file in 5 bullets, then propose the next decision (read another file or stop).
+Do not execute any actions.
+```
+
+Loop: route → read one file → summarize in 5 bullets → decide (stop / read one more / hand off to action).
+
+### Version rules
+
+- The baseline is **Oracle Database 19c** unless a skill says otherwise.
+- `DBMS_VECTOR` and most Select AI / AI Profiles examples are documented for **26ai**, and some also work on Autonomous Database. Don't assume these features are on 19c.
+
+### Article 3 preview: SQLcl MCP ("act")
+
+- Run SQLcl as a local MCP server with `sql -mcp` (stdio). Requires SQLcl 25.2+ and Java 17 or 21.
+- Connect with a **saved connection name** (`-save -savepwd`). The password never goes into the prompt.
+- It starts in the most restrictive "restrict level". Widen it deliberately.
+- Session tagging (`MODULE`/`ACTION` in `V$SESSION`) and the MCP activity log let a DBA check what actually ran.
+- Use a non-production DB and a read-only, least-privilege user for testing.
 
 ## oracle/skills repo summary (verified from README)
 
